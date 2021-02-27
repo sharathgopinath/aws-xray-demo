@@ -32,6 +32,7 @@ Resources:
       Handler: aws-xray-demo::aws_xray_demo.Trigger.Function::ToUpper
       MemorySize: 128
       Timeout: 20
+      Tracing: Active
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref DDBTable

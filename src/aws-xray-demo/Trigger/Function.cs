@@ -7,6 +7,7 @@ using Amazon.DynamoDBv2.Model;
 using Serilog;
 using Serilog.Formatting.Json;
 using Microsoft.Extensions.Configuration;
+using Amazon.XRay.Recorder.Handlers.AwsSdk;
 
 // Assembly attribute to enable the Lambda function's JSON input to be converted into a .NET class.
 [assembly: LambdaSerializer(typeof(Amazon.Lambda.Serialization.SystemTextJson.DefaultLambdaJsonSerializer))]
@@ -28,6 +29,7 @@ namespace aws_xray_demo.Trigger
 
         public Function()
         {
+            AWSSDKHandler.RegisterXRayForAllServices();
             _logger = CreateLogger();
             _config = BuildConfiguration();
         }
