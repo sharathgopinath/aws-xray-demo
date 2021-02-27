@@ -12,5 +12,5 @@
   "function-runtime": "dotnetcore3.1",
   "function-memory-size": 256,
   "function-timeout": 30,
-  "function-handler": "aws-xray-demo::aws_xray_demo.Function::FunctionHandler"
+  "function-handler": "aws-xray-demo::aws_xray_demo.Trigger.Function::ToUpper"
 }

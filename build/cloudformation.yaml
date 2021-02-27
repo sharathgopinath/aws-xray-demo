@@ -7,58 +7,32 @@ Parameters:
     Type: String
     Description: Name of an environment. 'dev', 'staging', 'prod' and any name.
 
-Outputs:
-  LambdaRoleARN:
-    Description: Role for Lambda execution.
-    Value:
-      Fn::GetAtt:
-        - LambdaRole
-        - Arn
-    Export:
-      Name:
-        Fn::Sub: LambdaRole
-  LambdaFunctionName:
-    Value:
-      Ref: LambdaFunction
-  LambdaFunctionARN:
-    Description: Lambda function ARN.
-    Value:
-      Fn::GetAtt:
-        - LambdaFunction
-        - Arn
-    Export:
-      Name:
-        Fn::Sub: LambdaARN-${EnvName}
-
 Resources:
-  LambdaRole:
-    Type: AWS::IAM::Role
+  DDBTable:
+    Type: AWS::DynamoDB::Table
     Properties:
-      RoleName:
-        Fn::Sub: aws-xray-demo-lambda-role
-      AssumeRolePolicyDocument:
-        Statement:
-          - Action:
-            - sts:AssumeRole
-            Effect: Allow
-            Principal:
-              Service:
-              - lambda.amazonaws.com
-        Version: 2012-10-17
-      ManagedPolicyArns:
-        - arn:aws:iam::aws:policy/AWSLambdaExecute
+      TableName: "upper-case-text"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: "id"
+          AttributeType: "S"
+      KeySchema:
+        -
+          AttributeName: "id"
+          KeyType: "HASH"
+
   LambdaFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName:
-        Fn::Sub: aws-xray-demo-${EnvName}
-      Description: aws-xray-demo lambda
+        Fn::Sub: aws-xray-demo-trigger-${EnvName}
+      Description: Takes a string and does a ToUpper and saves in database
       Runtime: dotnetcore3.1
       CodeUri: ./packages/aws-xray-demo
-      Handler: aws-xray-demo::aws_xray_demo.Function::FunctionHandler
+      Handler: aws-xray-demo::aws_xray_demo.Trigger.Function::ToUpper
       MemorySize: 128
-      Timeout: 10
-      Role:
-        Fn::GetAtt:
-          - LambdaRole
-          - Arn
+      Timeout: 20
+      Tracing: Active
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref DDBTable
