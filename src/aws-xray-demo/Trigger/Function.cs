@@ -4,19 +4,22 @@ using System.Threading.Tasks;
 using Amazon.DynamoDBv2;
 using Amazon.Lambda.Core;
 using Amazon.DynamoDBv2.Model;
+using Amazon.SimpleNotificationService;
+using Amazon.SimpleNotificationService.Model;
 using Serilog;
 using Serilog.Formatting.Json;
 using Microsoft.Extensions.Configuration;
 using Amazon.XRay.Recorder.Handlers.AwsSdk;
-
-// Assembly attribute to enable the Lambda function's JSON input to be converted into a .NET class.
-[assembly: LambdaSerializer(typeof(Amazon.Lambda.Serialization.SystemTextJson.DefaultLambdaJsonSerializer))]
+using Newtonsoft.Json;
+using Amazon.XRay.Recorder.Core;
+using Amazon.XRay.Recorder.Core.Internal.Entities;
 
 namespace aws_xray_demo.Trigger
 {
     public class Function
     {
         private IAmazonDynamoDB _dynamoDbClient;
+        private IAmazonSimpleNotificationService _snsClient;
         private ILogger _logger;
         private IConfiguration _config;
 
@@ -55,12 +58,11 @@ namespace aws_xray_demo.Trigger
                 }
                 await Save(inputToUpper);
 
-                if (_failures[FailurePoints.OnProcess])
+                if (_failures[FailurePoints.OnPublish])
                 {
                     throw new InvalidOperationException("Failed on publish.");
                 }
-
-                //Publish(input);
+                await Publish(inputToUpper);
             }
             catch (Exception ex)
             {
@@ -69,7 +71,30 @@ namespace aws_xray_demo.Trigger
             }
         }
 
-        private async Task Save(string input)
+        private async Task Publish(string inputToUpper)
+        {
+            _snsClient = new AmazonSimpleNotificationServiceClient(new AmazonSimpleNotificationServiceConfig
+            {
+                RegionEndpoint = Amazon.RegionEndpoint.APSoutheast2,
+                ServiceURL = _config.GetSection("SNS:ServiceUrl").Value
+            });
+            
+            var traceEntity = AWSXRayRecorder.Instance.GetEntity();
+            
+            var message = new 
+            {
+                InputToUpper = inputToUpper,
+                FailureOnProcess = _failures[FailurePoints.OnProcess],
+            };
+
+            await _snsClient.PublishAsync(new PublishRequest
+            {
+                TopicArn = Environment.GetEnvironmentVariable("Sns__TopicArn"),
+                Message = JsonConvert.SerializeObject(message)
+            });
+        }
+
+        private async Task Save(string inputToUpper)
         {
             _dynamoDbClient = new AmazonDynamoDBClient(new AmazonDynamoDBConfig 
             {
@@ -82,10 +107,10 @@ namespace aws_xray_demo.Trigger
                 Item = new Dictionary<string, AttributeValue>
                 {
                     {"id", new AttributeValue{S = Guid.NewGuid().ToString()}},
-                    {"text", new AttributeValue{S = input.ToUpper()}},
+                    {"text", new AttributeValue{S = inputToUpper}},
                     {"timestamp", new AttributeValue{S = DateTime.Now.ToString()}}
                 },
-                TableName = _config.GetSection("DataStore:TableName").Value
+                TableName = Environment.GetEnvironmentVariable("DataStore__TableName")
             });
         }
 

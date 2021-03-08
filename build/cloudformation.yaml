@@ -11,7 +11,8 @@ Resources:
   DDBTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: "upper-case-text"
+      TableName: 
+        Fn::Sub: upper-case-text-${EnvName}
       BillingMode: PAY_PER_REQUEST
       AttributeDefinitions:
         - AttributeName: "id"
@@ -21,7 +22,42 @@ Resources:
           AttributeName: "id"
           KeyType: "HASH"
 
-  LambdaFunction:
+  ProcessQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: 
+        Fn::Sub: aws-xray-demo-process-${EnvName}
+
+  TriggerSNSTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: 
+        Fn::Sub: aws-xray-demo-trigger-${EnvName}
+
+  TriggerSNSSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: sqs
+      TopicArn: !Ref TriggerSNSTopic
+      Endpoint: !GetAtt ProcessQueue.Arn
+      RawMessageDelivery: true
+
+  ProcessQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      PolicyDocument:
+        Statement:
+          Effect: Allow
+          Principal: "*"
+          Action: "SQS:*"
+          Resource: "*"
+          Condition:
+            ArnEquals:
+              "aws:SourceArn": !Ref TriggerSNSTopic
+      Queues:
+        - !Ref ProcessQueue
+
+  LambdaTriggerFunction:
     Type: AWS::Serverless::Function
     Properties:
       FunctionName:
@@ -33,6 +69,35 @@ Resources:
       MemorySize: 128
       Timeout: 20
       Tracing: Active
+      Environment:
+        Variables:
+          DataStore__TableName: !Ref DDBTable
+          Sns__TopicArn: !Ref TriggerSNSTopic
       Policies:
         - DynamoDBCrudPolicy:
             TableName: !Ref DDBTable
+        - SNSPublishMessagePolicy:
+            TopicName: !GetAtt TriggerSNSTopic.TopicName
+
+  LambdaProcessFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName:
+        Fn::Sub: aws-xray-demo-process-${EnvName}
+      Description: Subscribes to an sqs queue and processes the message
+      Runtime: dotnetcore3.1
+      CodeUri: ./packages/aws-xray-demo
+      Handler: aws-xray-demo::aws_xray_demo.Process.Function::Process
+      MemorySize: 128
+      Timeout: 20
+      Tracing: Active
+      Events:
+        TriggerMessageEvent:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt ProcessQueue.Arn
+            BatchSize: 1
+      Policies:
+        - SQSPollerPolicy:
+            QueueName: 
+              !GetAtt ProcessQueue.QueueName
