@@ -80,13 +80,7 @@ namespace aws_xray_demo.Trigger
             });
             
             var traceEntity = AWSXRayRecorder.Instance.GetEntity();
-            var traceHeader = new TraceHeader
-            {
-                RootTraceId = traceEntity.TraceId,
-                ParentId = traceEntity.Id,
-                Sampled = traceEntity.Sampled
-            };
-
+            
             var message = new 
             {
                 InputToUpper = inputToUpper,
@@ -96,11 +90,7 @@ namespace aws_xray_demo.Trigger
             await _snsClient.PublishAsync(new PublishRequest
             {
                 TopicArn = Environment.GetEnvironmentVariable("Sns__TopicArn"),
-                Message = JsonConvert.SerializeObject(message),
-                MessageAttributes = new Dictionary<string, MessageAttributeValue>
-                {
-                    { "AWSTraceHeader", new MessageAttributeValue{ StringValue = traceHeader.ToString(), DataType = "String" } }
-                }
+                Message = JsonConvert.SerializeObject(message)
             });
         }
 
